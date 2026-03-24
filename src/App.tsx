@@ -10,7 +10,7 @@ const PASTEL_HUES = [
   { name: 'Yellow', value: 60 },
   { name: 'Lime', value: 90 },
   { name: 'Green', value: 120 },
-  { name: 'Teal', value: 150 },
+  { name: 'Seagreen', value: 150 },
   { name: 'Cyan', value: 180 },
   { name: 'Sky', value: 210 },
   { name: 'Blue', value: 240 },
@@ -34,7 +34,7 @@ export default function App() {
   const [referenceText, setReferenceText] = useState('');
   const [showReference, setShowReference] = useState(false);
   const [isReaderMode, setIsReaderMode] = useState(false);
-  const [hue, setHue] = useState(240);
+  const [hue, setHue] = useState(150);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isAmoled, setIsAmoled] = useState(false);
   const [fontSize, setFontSize] = useState(16);
