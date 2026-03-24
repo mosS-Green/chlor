@@ -53,6 +53,9 @@ export default function App() {
   const containerRef = useRef<HTMLElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
+  const [isMainFocused, setIsMainFocused] = useState(false);
+  const [isRefFocused, setIsRefFocused] = useState(false);
+
   // Click outside to close settings
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -68,8 +71,37 @@ export default function App() {
   useEffect(() => {
     const savedText = localStorage.getItem('chlor-text');
     const savedRef = localStorage.getItem('chlor-ref');
+    const savedShowRef = localStorage.getItem('chlor-show-ref');
+    const savedSplit = localStorage.getItem('chlor-split');
+
     if (savedText !== null) setText(savedText);
     if (savedRef !== null) setReferenceText(savedRef);
+    if (savedShowRef !== null) setShowReference(savedShowRef === 'true');
+    if (savedSplit !== null) setSplitRatio(Number(savedSplit));
+  }, []);
+
+  // Refs for auto-save
+  const textRef = useRef(text);
+  const refTextRef = useRef(referenceText);
+  const showRefRef = useRef(showReference);
+  const splitRef = useRef(splitRatio);
+
+  useEffect(() => {
+    textRef.current = text;
+    refTextRef.current = referenceText;
+    showRefRef.current = showReference;
+    splitRef.current = splitRatio;
+  }, [text, referenceText, showReference, splitRatio]);
+
+  // Auto-save timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      localStorage.setItem('chlor-text', textRef.current);
+      localStorage.setItem('chlor-ref', refTextRef.current);
+      localStorage.setItem('chlor-show-ref', showRefRef.current.toString());
+      localStorage.setItem('chlor-split', splitRef.current.toString());
+    }, 10000);
+    return () => clearInterval(timer);
   }, []);
 
   // Resize Logic
@@ -165,12 +197,19 @@ export default function App() {
   const handleSave = () => {
     localStorage.setItem('chlor-text', text);
     localStorage.setItem('chlor-ref', referenceText);
+    localStorage.setItem('chlor-show-ref', showReference.toString());
+    localStorage.setItem('chlor-split', splitRatio.toString());
     setSaveStatus('Saved!');
     setTimeout(() => setSaveStatus(''), 2000);
   };
 
   const handleExport = () => {
-    const data = JSON.stringify({ text, referenceText }, null, 2);
+    const data = JSON.stringify({ 
+      text, 
+      referenceText, 
+      showReference, 
+      splitRatio 
+    }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -191,6 +230,8 @@ export default function App() {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.text !== undefined) setText(parsed.text);
         if (parsed.referenceText !== undefined) setReferenceText(parsed.referenceText);
+        if (parsed.showReference !== undefined) setShowReference(parsed.showReference);
+        if (parsed.splitRatio !== undefined) setSplitRatio(parsed.splitRatio);
       } catch (err) {
         console.error("Invalid JSON file");
       }
@@ -432,8 +473,10 @@ export default function App() {
             <textarea
               value={referenceText}
               onChange={(e) => setReferenceText(e.target.value)}
+              onFocus={() => setIsRefFocused(true)}
+              onBlur={() => setIsRefFocused(false)}
               placeholder="Paste reference text here..."
-              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto"
+              className={`flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto transition-[padding] duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${isRefFocused ? 'pb-[50vh]' : 'pb-8'}`}
               style={{ fontFamily, fontSize: `${fontSize}px` }}
               spellCheck={false}
             />
@@ -445,8 +488,11 @@ export default function App() {
           <div 
             onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
             onTouchStart={(e) => { setIsDragging(true); }}
-            className="flex-none w-full h-2 md:w-2 md:h-full bg-black/5 dark:bg-white/5 hover:bg-black/20 dark:hover:bg-white/20 cursor-row-resize md:cursor-col-resize transition-colors z-10"
-            style={{ backgroundColor: isDragging ? `hsla(${hue}, 50%, 50%, 0.5)` : undefined }}
+            className="flex-none w-full h-2 md:w-2 md:h-full bg-black/5 dark:bg-white/5 hover:bg-black/20 dark:hover:bg-white/20 cursor-row-resize md:cursor-col-resize transition-colors z-10 relative"
+            style={{ 
+              backgroundColor: isDragging ? `hsla(${hue}, 50%, 50%, 0.5)` : undefined,
+              boxShadow: '0 0 24px 16px var(--bg-color)'
+            }}
           />
         )}
 
@@ -485,8 +531,10 @@ export default function App() {
               ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onFocus={() => setIsMainFocused(true)}
+              onBlur={() => setIsMainFocused(false)}
               placeholder=""
-              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto pb-32"
+              className={`flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto transition-[padding] duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${isMainFocused ? 'pb-[50vh]' : 'pb-32'}`}
               style={{ fontFamily, fontSize: `${fontSize}px` }}
               spellCheck={false}
             />
