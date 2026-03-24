@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500&family=Lora:wght@400;500&family=Space+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-fira: "Fira Code", monospace;
+  --font-inter: "Inter", sans-serif;
+  --font-lora: "Lora", serif;
+  --font-space: "Space Mono", monospace;
+}
+
+:root {
+  --hue: 240;
+  --saturation: 20%;
+  
+  /* Light mode defaults */
+  --bg-lightness: 95%;
+  --text-lightness: 20%;
+  --text-saturation: 40%; /* Subtle tint for text */
+  
+  /* Dark mode defaults */
+  --bg-darkness: 10%;
+  --text-darkness: 85%;
+  
+  --bg-color: hsl(var(--hue), var(--saturation), var(--bg-lightness));
+  --text-color: hsl(var(--hue), var(--text-saturation), var(--text-lightness));
+  --accent-color: hsl(var(--hue), 50%, 50%);
+  
+  --brightness-filter: brightness(1);
+}
+
+.dark {
+  --bg-color: hsl(var(--hue), var(--saturation), var(--bg-darkness));
+  --text-color: hsl(var(--hue), var(--text-saturation), var(--text-darkness));
+}
+
+.dark.amoled {
+  --bg-color: #000000;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  filter: var(--brightness-filter);
+}
+
+/* Markdown Styles */
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  color: hsl(var(--hue), 60%, 60%);
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.dark .markdown-body h1, .dark .markdown-body h2, .dark .markdown-body h3, .dark .markdown-body h4, .dark .markdown-body h5, .dark .markdown-body h6 {
+  color: hsl(var(--hue), 60%, 70%);
+}
+
+.markdown-body p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+}
+
+.markdown-body a {
+  color: hsl(var(--hue), 70%, 50%);
+  text-decoration: underline;
+}
+
+.dark .markdown-body a {
+  color: hsl(var(--hue), 70%, 60%);
+}
+
+.markdown-body strong {
+  color: hsl(var(--hue), 80%, 45%);
+  font-weight: 700;
+}
+
+.dark .markdown-body strong {
+  color: hsl(var(--hue), 80%, 65%);
+}
+
+.markdown-body em {
+  color: hsl(var(--hue), 50%, 40%);
+  font-style: italic;
+}
+
+.dark .markdown-body em {
+  color: hsl(var(--hue), 50%, 75%);
+}
+
+.markdown-body del {
+  color: hsl(var(--hue), 30%, 50%);
+  opacity: 0.7;
+}
+
+.markdown-body code {
+  color: hsl(var(--hue), 60%, 40%);
+  background-color: hsl(var(--hue), var(--saturation), calc(var(--bg-lightness) - 10%));
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-family: var(--font-fira);
+  font-size: 0.9em;
+}
+
+.dark .markdown-body code {
+  color: hsl(var(--hue), 60%, 70%);
+  background-color: hsl(var(--hue), var(--saturation), calc(var(--bg-darkness) + 10%));
+}
+
+.markdown-body pre {
+  background-color: hsl(var(--hue), var(--saturation), calc(var(--bg-lightness) - 5%));
+  padding: 1em;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.dark .markdown-body pre {
+  background-color: hsl(var(--hue), var(--saturation), calc(var(--bg-darkness) + 5%));
+}
+
+.markdown-body pre code {
+  color: inherit;
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid hsl(var(--hue), 40%, 50%);
+  padding-left: 1em;
+  margin-left: 0;
+  color: hsl(var(--hue), var(--saturation), calc(var(--text-lightness) + 20%));
+  font-style: italic;
+}
+
+.dark .markdown-body blockquote {
+  color: hsl(var(--hue), var(--saturation), calc(var(--text-darkness) - 20%));
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+  padding-left: 2em;
+  margin-bottom: 1em;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+  padding-left: 2em;
+  margin-bottom: 1em;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--hue), var(--saturation), 50%);
+  border-radius: 4px;
+  opacity: 0.5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--hue), var(--saturation), 60%);
+}
+
+/* Hide scrollbar for editor to keep it clean, but allow scrolling */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
