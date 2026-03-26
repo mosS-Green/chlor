@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson } from 'lucide-react';
+import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus } from 'lucide-react';
 
 const PASTEL_HUES = [
   { name: 'Red', value: 0 },
@@ -46,6 +46,7 @@ export default function App() {
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [isFullSettingsModalOpen, setIsFullSettingsModalOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,14 +54,12 @@ export default function App() {
   const containerRef = useRef<HTMLElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
-  const [isMainFocused, setIsMainFocused] = useState(false);
-  const [isRefFocused, setIsRefFocused] = useState(false);
-
   // Click outside to close settings
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
         setIsSettingsOpen(false);
+        setIsFullSettingsModalOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -281,16 +280,39 @@ export default function App() {
           <ChevronDown size={24} className={`transform transition-transform ${isSettingsOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {/* Settings Menu */}
-        {isSettingsOpen && (
+        {/* Settings Menu Quick Actions */}
+        {isSettingsOpen && !isFullSettingsModalOpen && (
+          <div className="absolute top-12 right-0 p-2 rounded-xl shadow-2xl bg-black/90 backdrop-blur-md border border-white/10 flex flex-col space-y-1 z-50">
+            <button onClick={() => setShowReference(!showReference)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Toggle Reference"><PanelLeft size={20} /></button>
+            <button onClick={handleFullScreen} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Fullscreen"><Maximize size={20} /></button>
+            <button onClick={() => setShowEmojiButton(!showEmojiButton)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Emoji Key"><Smile size={20} /></button>
+            <button onClick={() => setIsReaderMode(!isReaderMode)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Toggle Reader Mode">{isReaderMode ? <Edit3 size={20} /> : <BookOpen size={20} />}</button>
+            <button onClick={() => setFontSize(f => f + 2)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Increase Font"><Plus size={20} /></button>
+            <button onClick={() => setFontSize(f => Math.max(8, f - 2))} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Decrease Font"><Minus size={20} /></button>
+            <button onClick={() => { setIsDarkMode(true); setIsAmoled(!isAmoled); }} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Toggle AMOLED">
+              <Moon size={20} fill={isAmoled ? "white" : "none"} />
+            </button>
+            <button onClick={() => setIsFullSettingsModalOpen(true)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="More Settings"><Settings size={20} /></button>
+          </div>
+        )}
+
+        {/* Full Settings Menu */}
+        {(isSettingsOpen && isFullSettingsModalOpen) && (
           <div 
-            className="absolute top-12 right-0 w-72 p-4 rounded-xl shadow-2xl border backdrop-blur-md max-h-[80vh] overflow-y-auto hide-scrollbar"
+            className="absolute top-12 right-0 w-72 p-4 rounded-xl shadow-2xl border backdrop-blur-md max-h-[80vh] overflow-y-auto hide-scrollbar z-50"
             style={{ 
               backgroundColor: `hsla(${hue}, 20%, ${isDarkMode ? '15%' : '95%'}, 0.95)`,
               borderColor: `hsla(${hue}, 30%, 50%, 0.2)`
             }}
           >
             <div className="space-y-6">
+              <button 
+                onClick={() => setIsFullSettingsModalOpen(false)}
+                className="w-full text-center p-2 mb-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg font-medium opacity-80"
+              >
+                ← Back to Quick Menu
+              </button>
+
               {/* Theme Accent */}
               <div>
                 <label className="text-sm font-medium mb-2 block opacity-80">Theme Accent</label>
@@ -318,35 +340,7 @@ export default function App() {
                 </button>
               </div>
 
-              {isDarkMode && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium opacity-80">AMOLED Black</span>
-                  <button 
-                    onClick={() => setIsAmoled(!isAmoled)}
-                    className={`w-10 h-5 rounded-full relative transition-colors ${isAmoled ? 'bg-current' : 'bg-gray-400/30'}`}
-                    style={{ color: `hsl(${hue}, 60%, 60%)` }}
-                  >
-                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${isAmoled ? 'translate-x-5' : ''}`} />
-                  </button>
-                </div>
-              )}
-
               {/* Font Controls */}
-              <div>
-                <label className="text-sm font-medium mb-2 block opacity-80">Font Size</label>
-                <div className="flex items-center space-x-4">
-                  <button 
-                    onClick={() => setFontSize(f => Math.max(8, f - 2))}
-                    className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-                  >-</button>
-                  <span className="text-sm">{fontSize}px</span>
-                  <button 
-                    onClick={() => setFontSize(f => f + 2)}
-                    className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-                  >+</button>
-                </div>
-              </div>
-
               <div>
                 <label className="text-sm font-medium mb-2 block opacity-80">Font Family</label>
                 <select 
@@ -375,27 +369,8 @@ export default function App() {
                 />
               </div>
 
-              {/* Emoji Toggle */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium opacity-80">Emoji Button</span>
-                <button 
-                  onClick={() => setShowEmojiButton(!showEmojiButton)}
-                  className={`w-10 h-5 rounded-full relative transition-colors ${showEmojiButton ? 'bg-current' : 'bg-gray-400/30'}`}
-                  style={{ color: `hsl(${hue}, 60%, 60%)` }}
-                >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${showEmojiButton ? 'translate-x-5' : ''}`} />
-                </button>
-              </div>
-
               {/* Actions */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
-                <button 
-                  onClick={() => setShowReference(!showReference)}
-                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm col-span-2"
-                  style={{ color: showReference ? `hsl(${hue}, 60%, 60%)` : 'inherit' }}
-                >
-                  <PanelLeft size={16} /> <span>{showReference ? 'Hide Reference' : 'Show Reference'}</span>
-                </button>
                 <button 
                   onClick={handleSave}
                   className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm"
@@ -429,22 +404,8 @@ export default function App() {
                   <Copy size={16} /> <span>Copy</span>
                 </button>
                 <button 
-                  onClick={handleFullScreen}
-                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm"
-                >
-                  <Maximize size={16} /> <span>Fullscreen</span>
-                </button>
-                <button 
-                  onClick={() => setIsReaderMode(!isReaderMode)}
-                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm col-span-2"
-                  style={{ color: isReaderMode ? `hsl(${hue}, 60%, 60%)` : 'inherit' }}
-                >
-                  {isReaderMode ? <Edit3 size={16} /> : <BookOpen size={16} />} 
-                  <span>{isReaderMode ? 'Editor Mode' : 'Reader Mode'}</span>
-                </button>
-                <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm col-span-2"
+                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm"
                 >
                   <Upload size={16} /> <span>Browse Files</span>
                 </button>
@@ -473,10 +434,8 @@ export default function App() {
             <textarea
               value={referenceText}
               onChange={(e) => setReferenceText(e.target.value)}
-              onFocus={() => setIsRefFocused(true)}
-              onBlur={() => setIsRefFocused(false)}
               placeholder="Paste reference text here..."
-              className={`flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto transition-[padding] duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${isRefFocused ? 'pb-[50vh]' : 'pb-8'}`}
+              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
               spellCheck={false}
             />
@@ -499,29 +458,20 @@ export default function App() {
         {/* Primary Editor/Reader Panel */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {text === '' && !isReaderMode && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 opacity-50 pointer-events-none z-10">
-              <button 
-                onClick={handlePasteText}
-                className="flex items-center space-x-2 px-6 py-3 rounded-full border border-current hover:bg-current hover:text-white transition-colors pointer-events-auto"
-                style={{ color: `hsl(${hue}, 50%, 50%)` }}
-              >
-                <Clipboard size={20} />
-                <span>Paste text</span>
-              </button>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center space-x-2 px-6 py-3 rounded-full border border-current hover:bg-current hover:text-white transition-colors pointer-events-auto"
+                className="w-32 h-32 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-current opacity-30 hover:opacity-100 transition-opacity pointer-events-auto cursor-pointer"
                 style={{ color: `hsl(${hue}, 50%, 50%)` }}
               >
-                <Upload size={20} />
-                <span>Paste/upload file</span>
+                <Upload size={32} />
               </button>
             </div>
           )}
 
           {isReaderMode ? (
             <div 
-              className="markdown-body flex-1 w-full p-4 sm:p-8 md:p-12 overflow-y-auto hide-scrollbar pb-32"
+              className="markdown-body flex-1 w-full p-4 sm:p-8 md:p-12 overflow-y-auto hide-scrollbar !pb-[50vh]"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
             >
               <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
@@ -531,10 +481,8 @@ export default function App() {
               ref={textareaRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onFocus={() => setIsMainFocused(true)}
-              onBlur={() => setIsMainFocused(false)}
-              placeholder=""
-              className={`flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto transition-[padding] duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] ${isMainFocused ? 'pb-[50vh]' : 'pb-32'}`}
+              placeholder="Start typing or paste your content..."
+              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
               spellCheck={false}
             />
