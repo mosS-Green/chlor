@@ -183,11 +183,21 @@ body {
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  color: transparent;
+  color: var(--text-color);
   z-index: 1;
 }
 
 .ghost-text {
   opacity: 0.35;
   font-style: italic;
+}
+
+/* Textarea with transparent text — placeholder must be explicitly styled */
+.ghost-editor::placeholder {
+  color: var(--text-color);
+  opacity: 0.3;
+}
+
+.ghost-editor::selection {
+  background: hsla(var(--hue), 50%, 50%, 0.3);
 }

@@ -9,9 +9,9 @@ interface PredictionOptions {
 }
 
 interface Suggestion {
-  text: string;        // The full suggestion text
-  anchorPos: number;   // Cursor position where suggestion was generated
-  matched: number;     // Number of chars already typed that match
+  text: string;        // The full suggestion text (never starts with whitespace)
+  anchorPos: number;   // Cursor position where suggestion is anchored (advances on space)
+  matched: number;     // Number of suggestion chars already typed that match
 }
 
 export function useTextPrediction({ text, cursorPos, apiKey, enabled }: PredictionOptions) {
@@ -22,12 +22,10 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
   const prevTextRef = useRef(text);
   const prevCursorRef = useRef(cursorPos);
 
-  // Clear suggestion helper
   const clearSuggestion = useCallback(() => {
     setSuggestion(null);
   }, []);
 
-  // Accept suggestion helper
   const acceptSuggestion = useCallback((): { newText: string; newCursorPos: number } | null => {
     if (!suggestion) return null;
     const remaining = suggestion.text.slice(suggestion.matched);
@@ -44,12 +42,11 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     return { newText, newCursorPos };
   }, [suggestion, text]);
 
-  // Fetch prediction from Gemini
   const fetchPrediction = useCallback(async (contextText: string, pos: number) => {
     if (!apiKey || !enabled) return;
     
     const textBefore = contextText.slice(Math.max(0, pos - 690), pos);
-    if (textBefore.trim().length < 3) return; // Need some context
+    if (textBefore.trim().length < 3) return;
 
     setIsLoading(true);
     abortRef.current = false;
@@ -61,7 +58,7 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
         contents: [
           {
             role: 'user',
-            parts: [{ text: `You are an inline text completion engine. Given the text before the cursor, predict the next 1–3 words or a single short phrase that naturally continues the writing. Output ONLY the predicted text, nothing else—no quotes, no explanation, no leading space unless grammatically needed.\n\nText before cursor:\n${textBefore}` }],
+            parts: [{ text: `You are an inline text completion engine. Given the text before the cursor, predict the next 1–3 words or a single short phrase that naturally continues the writing. Output ONLY the predicted text, nothing else—no quotes, no explanation. Do NOT start with a space. You may use \\n to indicate a line break if appropriate.\n\nText before cursor:\n${textBefore}` }],
           },
         ],
         config: {
@@ -72,17 +69,20 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
 
       if (abortRef.current) return;
 
-      const predictionText = response?.text?.trim();
+      let predictionText = response?.text?.trim();
       if (predictionText && predictionText.length > 0) {
-        // Check if the text immediately before cursor ends with a space or is empty
-        const needsSpace = textBefore.length > 0 && !textBefore.endsWith(' ') && !textBefore.endsWith('\n') && !predictionText.startsWith(' ');
-        const finalPrediction = needsSpace ? ' ' + predictionText : predictionText;
+        // Parse literal \n as actual newlines
+        predictionText = predictionText.replace(/\\n/g, '\n');
+        // Strip any leading whitespace — suggestions always start immediately
+        predictionText = predictionText.replace(/^\s+/, '');
         
-        setSuggestion({
-          text: finalPrediction,
-          anchorPos: pos,
-          matched: 0,
-        });
+        if (predictionText.length > 0) {
+          setSuggestion({
+            text: predictionText,
+            anchorPos: pos,
+            matched: 0,
+          });
+        }
       }
     } catch (err) {
       console.error('Prediction error:', err);
@@ -91,37 +91,39 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     }
   }, [apiKey, enabled]);
 
-  // Handle text/cursor changes for partial matching and idle timer
   useEffect(() => {
     const prevText = prevTextRef.current;
     const prevCursor = prevCursorRef.current;
     prevTextRef.current = text;
     prevCursorRef.current = cursorPos;
 
-    // If not enabled or no API key, do nothing
     if (!enabled || !apiKey) {
       if (suggestion) clearSuggestion();
       return;
     }
 
-    // Check if we have an active suggestion and user is typing forward
     if (suggestion) {
       const charsAdded = text.length - prevText.length;
       const cursorMoved = cursorPos - prevCursor;
 
-      // User typed forward at the suggestion anchor point
       if (charsAdded > 0 && cursorMoved === charsAdded && cursorPos > suggestion.anchorPos) {
-        const typedSoFar = text.slice(suggestion.anchorPos, cursorPos);
-        const suggestionPrefix = suggestion.text.slice(0, typedSoFar.length);
+        const newChars = text.slice(prevCursor, cursorPos);
+        const typedFromAnchor = text.slice(suggestion.anchorPos, cursorPos);
+        const suggestionPrefix = suggestion.text.slice(0, typedFromAnchor.length);
 
-        if (suggestionPrefix === typedSoFar) {
-          // User is typing matching characters
-          setSuggestion(prev => prev ? { ...prev, matched: typedSoFar.length } : null);
-          
-          // If fully matched, clear
-          if (typedSoFar.length >= suggestion.text.length) {
+        if (suggestionPrefix === typedFromAnchor) {
+          // User typed matching characters
+          setSuggestion(prev => prev ? { ...prev, matched: typedFromAnchor.length } : null);
+          if (typedFromAnchor.length >= suggestion.text.length) {
             clearSuggestion();
           }
+        } else if (newChars.trim() === '') {
+          // User typed only whitespace — push suggestion forward with cursor
+          setSuggestion(prev => prev ? { 
+            ...prev, 
+            anchorPos: cursorPos,
+            matched: 0 
+          } : null);
         } else {
           // User diverged
           clearSuggestion();
@@ -138,10 +140,7 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     }
 
     idleTimerRef.current = setTimeout(() => {
-      // Only fetch if no active suggestion
-      if (!suggestion || suggestion.matched > 0) {
-        fetchPrediction(text, cursorPos);
-      }
+      fetchPrediction(text, cursorPos);
     }, 6900);
 
     return () => {
@@ -161,7 +160,6 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     };
   }, []);
 
-  // Get the visible (remaining) suggestion text
   const visibleSuggestion = suggestion ? suggestion.text.slice(suggestion.matched) : '';
   const suggestionAnchorPos = suggestion ? suggestion.anchorPos + suggestion.matched : -1;
 

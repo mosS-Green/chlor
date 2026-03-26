@@ -53,12 +53,15 @@ export default function App() {
   const [cursorPos, setCursorPos] = useState(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const refTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const tripleTapRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
+  const editorScrollRef = useRef(0);
+  const refScrollRef = useRef(0);
 
   // Click outside to close settings
   useEffect(() => {
@@ -85,6 +88,16 @@ export default function App() {
     if (savedShowRef !== null) setShowReference(savedShowRef === 'true');
     if (savedSplit !== null) setSplitRatio(Number(savedSplit));
     if (savedApiKey !== null) setGeminiApiKey(savedApiKey);
+
+    // Restore scroll positions after a tick
+    const savedEditorScroll = localStorage.getItem('chlor-editor-scroll');
+    const savedRefScroll = localStorage.getItem('chlor-ref-scroll');
+    if (savedEditorScroll !== null) editorScrollRef.current = Number(savedEditorScroll);
+    if (savedRefScroll !== null) refScrollRef.current = Number(savedRefScroll);
+    setTimeout(() => {
+      if (textareaRef.current) textareaRef.current.scrollTop = editorScrollRef.current;
+      if (refTextareaRef.current) refTextareaRef.current.scrollTop = refScrollRef.current;
+    }, 100);
   }, []);
 
   // Refs for auto-save
@@ -110,6 +123,8 @@ export default function App() {
       localStorage.setItem('chlor-show-ref', showRefRef.current.toString());
       localStorage.setItem('chlor-split', splitRef.current.toString());
       if (apiKeyRef.current) localStorage.setItem('chlor-gemini-key', apiKeyRef.current);
+      localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
+      localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
     }, 10000);
     return () => clearInterval(timer);
   }, []);
@@ -186,11 +201,20 @@ export default function App() {
     enabled: !isReaderMode && geminiApiKey.length > 0,
   });
 
-  // Sync ghost overlay scroll with textarea
+  // Sync ghost overlay scroll with textarea and track scroll position
   const handleEditorScroll = useCallback(() => {
-    if (textareaRef.current && ghostRef.current) {
-      ghostRef.current.scrollTop = textareaRef.current.scrollTop;
-      ghostRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    if (textareaRef.current) {
+      editorScrollRef.current = textareaRef.current.scrollTop;
+      if (ghostRef.current) {
+        ghostRef.current.scrollTop = textareaRef.current.scrollTop;
+        ghostRef.current.scrollLeft = textareaRef.current.scrollLeft;
+      }
+    }
+  }, []);
+
+  const handleRefScroll = useCallback(() => {
+    if (refTextareaRef.current) {
+      refScrollRef.current = refTextareaRef.current.scrollTop;
     }
   }, []);
 
@@ -275,6 +299,8 @@ export default function App() {
     localStorage.setItem('chlor-show-ref', showReference.toString());
     localStorage.setItem('chlor-split', splitRatio.toString());
     if (geminiApiKey) localStorage.setItem('chlor-gemini-key', geminiApiKey);
+    localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
+    localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
     setSaveStatus('Saved!');
     setTimeout(() => setSaveStatus(''), 2000);
   };
@@ -284,7 +310,9 @@ export default function App() {
       text, 
       referenceText, 
       showReference, 
-      splitRatio 
+      splitRatio,
+      editorScroll: editorScrollRef.current,
+      refScroll: refScrollRef.current,
     }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -308,6 +336,14 @@ export default function App() {
         if (parsed.referenceText !== undefined) setReferenceText(parsed.referenceText);
         if (parsed.showReference !== undefined) setShowReference(parsed.showReference);
         if (parsed.splitRatio !== undefined) setSplitRatio(parsed.splitRatio);
+        if (parsed.editorScroll !== undefined) {
+          editorScrollRef.current = parsed.editorScroll;
+          setTimeout(() => { if (textareaRef.current) textareaRef.current.scrollTop = parsed.editorScroll; }, 100);
+        }
+        if (parsed.refScroll !== undefined) {
+          refScrollRef.current = parsed.refScroll;
+          setTimeout(() => { if (refTextareaRef.current) refTextareaRef.current.scrollTop = parsed.refScroll; }, 100);
+        }
       } catch (err) {
         console.error("Invalid JSON file");
       }
@@ -530,8 +566,10 @@ export default function App() {
             style={{ flexBasis: `${splitRatio}%` }}
           >
             <textarea
+              ref={refTextareaRef}
               value={referenceText}
               onChange={(e) => setReferenceText(e.target.value)}
+              onScroll={handleRefScroll}
               placeholder="Paste reference text here..."
               className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
@@ -545,7 +583,7 @@ export default function App() {
           <div 
             onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); }}
             onTouchStart={(e) => { setIsDragging(true); }}
-            className="flex-none w-full h-2 md:w-2 md:h-full bg-black/5 dark:bg-white/5 hover:bg-black/20 dark:hover:bg-white/20 cursor-row-resize md:cursor-col-resize transition-colors z-10 relative"
+            className="flex-none w-full h-2 md:w-2 md:h-full bg-black/5 dark:bg-white/5 hover:bg-black/20 dark:hover:bg-white/20 cursor-row-resize md:cursor-col-resize transition-colors z-10 relative border-t border-dotted border-white/20 md:border-t-0"
             style={{ 
               backgroundColor: isDragging ? `hsla(${hue}, 50%, 50%, 0.5)` : undefined,
               boxShadow: '0 0 24px 16px var(--bg-color)'
@@ -576,22 +614,27 @@ export default function App() {
             </div>
           ) : (
             <div className="flex-1 relative overflow-hidden">
-              {/* Ghost text overlay */}
+              {/* Ghost text overlay — renders ALL visible text */}
               <div
                 ref={ghostRef}
                 className="ghost-overlay absolute inset-0 p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto pointer-events-none hide-scrollbar"
                 style={{ fontFamily, fontSize: `${fontSize}px` }}
                 aria-hidden="true"
               >
-                <span className="invisible">{text.slice(0, prediction.suggestionAnchorPos)}</span>
-                {prediction.hasSuggestion && (
-                  <span 
-                    className="ghost-text"
-                    style={{ color: `hsl(${hue}, 50%, 50%)` }}
-                  >{prediction.suggestion}</span>
+                {prediction.hasSuggestion ? (
+                  <>
+                    {text.slice(0, prediction.suggestionAnchorPos)}
+                    <span 
+                      className="ghost-text"
+                      style={{ color: `hsl(${hue}, 50%, 50%)` }}
+                    >{prediction.suggestion}</span>
+                    {text.slice(prediction.suggestionAnchorPos)}
+                  </>
+                ) : (
+                  text || '\u00A0'
                 )}
               </div>
-              {/* Actual textarea */}
+              {/* Actual textarea — text is transparent, caret visible */}
               <textarea
                 ref={textareaRef}
                 value={text}
@@ -605,8 +648,8 @@ export default function App() {
                 onTouchEnd={handleTouchEnd}
                 onScroll={handleEditorScroll}
                 placeholder="Start typing or paste your content..."
-                className="absolute inset-0 w-full h-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
-                style={{ fontFamily, fontSize: `${fontSize}px`, caretColor: `hsl(${hue}, 60%, 60%)` }}
+                className="ghost-editor absolute inset-0 w-full h-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
+                style={{ fontFamily, fontSize: `${fontSize}px`, color: 'transparent', caretColor: `hsl(${hue}, 60%, 60%)` }}
                 spellCheck={false}
               />
             </div>
