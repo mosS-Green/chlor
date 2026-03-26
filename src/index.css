@@ -177,3 +177,17 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Ghost text overlay for AI predictions */
+.ghost-overlay {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  color: transparent;
+  z-index: 1;
+}
+
+.ghost-text {
+  opacity: 0.35;
+  font-style: italic;
+}

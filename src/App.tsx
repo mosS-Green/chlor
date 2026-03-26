@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus } from 'lucide-react';
+import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus, Eye, EyeOff } from 'lucide-react';
+import { useTextPrediction } from './useTextPrediction';
 
 const PASTEL_HUES = [
   { name: 'Red', value: 0 },
@@ -47,12 +48,17 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [isFullSettingsModalOpen, setIsFullSettingsModalOpen] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [cursorPos, setCursorPos] = useState(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const tripleTapRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
 
   // Click outside to close settings
   useEffect(() => {
@@ -72,11 +78,13 @@ export default function App() {
     const savedRef = localStorage.getItem('chlor-ref');
     const savedShowRef = localStorage.getItem('chlor-show-ref');
     const savedSplit = localStorage.getItem('chlor-split');
+    const savedApiKey = localStorage.getItem('chlor-gemini-key');
 
     if (savedText !== null) setText(savedText);
     if (savedRef !== null) setReferenceText(savedRef);
     if (savedShowRef !== null) setShowReference(savedShowRef === 'true');
     if (savedSplit !== null) setSplitRatio(Number(savedSplit));
+    if (savedApiKey !== null) setGeminiApiKey(savedApiKey);
   }, []);
 
   // Refs for auto-save
@@ -84,13 +92,15 @@ export default function App() {
   const refTextRef = useRef(referenceText);
   const showRefRef = useRef(showReference);
   const splitRef = useRef(splitRatio);
+  const apiKeyRef = useRef(geminiApiKey);
 
   useEffect(() => {
     textRef.current = text;
     refTextRef.current = referenceText;
     showRefRef.current = showReference;
     splitRef.current = splitRatio;
-  }, [text, referenceText, showReference, splitRatio]);
+    apiKeyRef.current = geminiApiKey;
+  }, [text, referenceText, showReference, splitRatio, geminiApiKey]);
 
   // Auto-save timer
   useEffect(() => {
@@ -99,6 +109,7 @@ export default function App() {
       localStorage.setItem('chlor-ref', refTextRef.current);
       localStorage.setItem('chlor-show-ref', showRefRef.current.toString());
       localStorage.setItem('chlor-split', splitRef.current.toString());
+      if (apiKeyRef.current) localStorage.setItem('chlor-gemini-key', apiKeyRef.current);
     }, 10000);
     return () => clearInterval(timer);
   }, []);
@@ -167,6 +178,71 @@ export default function App() {
     }
   }, [hue, isDarkMode, isAmoled, brightness]);
 
+  // AI Text Prediction
+  const prediction = useTextPrediction({
+    text,
+    cursorPos,
+    apiKey: geminiApiKey,
+    enabled: !isReaderMode && geminiApiKey.length > 0,
+  });
+
+  // Sync ghost overlay scroll with textarea
+  const handleEditorScroll = useCallback(() => {
+    if (textareaRef.current && ghostRef.current) {
+      ghostRef.current.scrollTop = textareaRef.current.scrollTop;
+      ghostRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, []);
+
+  // Handle Tab key to accept suggestion
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab' && prediction.hasSuggestion) {
+      e.preventDefault();
+      const result = prediction.acceptSuggestion();
+      if (result) {
+        setText(result.newText);
+        setCursorPos(result.newCursorPos);
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.selectionStart = result.newCursorPos;
+            textareaRef.current.selectionEnd = result.newCursorPos;
+          }
+        }, 0);
+      }
+    }
+  }, [prediction]);
+
+  // Triple-tap handler for mobile
+  const handleTouchEnd = useCallback(() => {
+    if (!prediction.hasSuggestion) return;
+    const ref = tripleTapRef.current;
+    ref.count++;
+    if (ref.timer) clearTimeout(ref.timer);
+    if (ref.count >= 3) {
+      ref.count = 0;
+      const result = prediction.acceptSuggestion();
+      if (result) {
+        setText(result.newText);
+        setCursorPos(result.newCursorPos);
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.selectionStart = result.newCursorPos;
+            textareaRef.current.selectionEnd = result.newCursorPos;
+          }
+        }, 0);
+      }
+    } else {
+      ref.timer = setTimeout(() => { ref.count = 0; }, 500);
+    }
+  }, [prediction]);
+
+  // Track cursor position
+  const updateCursorPos = useCallback(() => {
+    if (textareaRef.current) {
+      setCursorPos(textareaRef.current.selectionStart);
+    }
+  }, []);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(text);
   };
@@ -198,6 +274,7 @@ export default function App() {
     localStorage.setItem('chlor-ref', referenceText);
     localStorage.setItem('chlor-show-ref', showReference.toString());
     localStorage.setItem('chlor-split', splitRatio.toString());
+    if (geminiApiKey) localStorage.setItem('chlor-gemini-key', geminiApiKey);
     setSaveStatus('Saved!');
     setTimeout(() => setSaveStatus(''), 2000);
   };
@@ -369,6 +446,27 @@ export default function App() {
                 />
               </div>
 
+              {/* Gemini API Key */}
+              <div>
+                <label className="text-sm font-medium mb-2 block opacity-80">Gemini API Key</label>
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    placeholder="Enter API key..."
+                    className="w-full p-2 pr-10 rounded bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 outline-none text-sm"
+                  />
+                  <button
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 opacity-60 hover:opacity-100"
+                  >
+                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-xs opacity-50 mt-1">For AI text suggestions (gemma-3-27b-it)</p>
+              </div>
+
               {/* Actions */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
                 <button 
@@ -477,15 +575,41 @@ export default function App() {
               <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
             </div>
           ) : (
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Start typing or paste your content..."
-              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
-              style={{ fontFamily, fontSize: `${fontSize}px` }}
-              spellCheck={false}
-            />
+            <div className="flex-1 relative overflow-hidden">
+              {/* Ghost text overlay */}
+              <div
+                ref={ghostRef}
+                className="ghost-overlay absolute inset-0 p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto pointer-events-none hide-scrollbar"
+                style={{ fontFamily, fontSize: `${fontSize}px` }}
+                aria-hidden="true"
+              >
+                <span className="invisible">{text.slice(0, prediction.suggestionAnchorPos)}</span>
+                {prediction.hasSuggestion && (
+                  <span 
+                    className="ghost-text"
+                    style={{ color: `hsl(${hue}, 50%, 50%)` }}
+                  >{prediction.suggestion}</span>
+                )}
+              </div>
+              {/* Actual textarea */}
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setTimeout(updateCursorPos, 0);
+                }}
+                onKeyDown={handleKeyDown}
+                onSelect={updateCursorPos}
+                onClick={updateCursorPos}
+                onTouchEnd={handleTouchEnd}
+                onScroll={handleEditorScroll}
+                placeholder="Start typing or paste your content..."
+                className="absolute inset-0 w-full h-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
+                style={{ fontFamily, fontSize: `${fontSize}px`, caretColor: `hsl(${hue}, 60%, 60%)` }}
+                spellCheck={false}
+              />
+            </div>
           )}
         </div>
       </main>
