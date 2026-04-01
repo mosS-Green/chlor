@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus, Eye, EyeOff, Trash2, Bold } from 'lucide-react';
 import { useTextPrediction } from './useTextPrediction';
 
 const PASTEL_HUES = [
@@ -30,6 +30,60 @@ const FONTS = [
   { name: 'Space Mono', value: 'var(--font-space)' },
 ];
 
+/**
+ * Convert markdown bold/italic/strikethrough to Unicode equivalents
+ * so it can be pasted into apps that don't support markdown.
+ */
+function convertToHardFont(input: string): string {
+  // Unicode bold mapping (Latin only)
+  const boldMap: Record<string, string> = {};
+  const italicMap: Record<string, string> = {};
+  const boldItalicMap: Record<string, string> = {};
+
+  // Build bold map: A-Z -> 𝗔-𝗭, a-z -> 𝗮-𝘇, 0-9 -> 𝟬-𝟵
+  for (let i = 0; i < 26; i++) {
+    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i); // 𝗔
+    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i); // 𝗮
+    italicMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D608 + i); // 𝘈
+    italicMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D622 + i); // 𝘢
+    boldItalicMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D63C + i); // 𝘼
+    boldItalicMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D656 + i); // 𝙖
+  }
+  for (let i = 0; i < 10; i++) {
+    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i); // 𝟬
+  }
+
+  function applyMap(text: string, map: Record<string, string>): string {
+    return [...text].map(ch => map[ch] || ch).join('');
+  }
+
+  let result = input;
+
+  // Bold+Italic: ***text*** or ___text___
+  result = result.replace(/\*{3}(.+?)\*{3}/g, (_, inner) => applyMap(inner, boldItalicMap));
+  result = result.replace(/_{3}(.+?)_{3}/g, (_, inner) => applyMap(inner, boldItalicMap));
+
+  // Bold: **text** or __text__
+  result = result.replace(/\*{2}(.+?)\*{2}/g, (_, inner) => applyMap(inner, boldMap));
+  result = result.replace(/_{2}(.+?)_{2}/g, (_, inner) => applyMap(inner, boldMap));
+
+  // Italic: *text* or _text_
+  result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, (_, inner) => applyMap(inner, italicMap));
+  result = result.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, (_, inner) => applyMap(inner, italicMap));
+
+  // Strikethrough: ~~text~~
+  result = result.replace(/~~(.+?)~~/g, (_, inner) => {
+    return [...inner].map(ch => ch + '\u0336').join('');
+  });
+
+  // Single ~text~ strikethrough
+  result = result.replace(/(?<!~)~(?!~)(.+?)(?<!~)~(?!~)/g, (_, inner) => {
+    return [...inner].map(ch => ch + '\u0336').join('');
+  });
+
+  return result;
+}
+
 export default function App() {
   const [text, setText] = useState('');
   const [referenceText, setReferenceText] = useState('');
@@ -51,9 +105,10 @@ export default function App() {
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [cursorPos, setCursorPos] = useState(0);
+  const [isHardFontMode, setIsHardFontMode] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const refTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const refPanelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLElement>(null);
@@ -82,12 +137,14 @@ export default function App() {
     const savedShowRef = localStorage.getItem('chlor-show-ref');
     const savedSplit = localStorage.getItem('chlor-split');
     const savedApiKey = localStorage.getItem('chlor-gemini-key');
+    const savedHardFont = localStorage.getItem('chlor-hard-font');
 
     if (savedText !== null) setText(savedText);
     if (savedRef !== null) setReferenceText(savedRef);
     if (savedShowRef !== null) setShowReference(savedShowRef === 'true');
     if (savedSplit !== null) setSplitRatio(Number(savedSplit));
     if (savedApiKey !== null) setGeminiApiKey(savedApiKey);
+    if (savedHardFont !== null) setIsHardFontMode(savedHardFont === 'true');
 
     // Restore scroll positions after a tick
     const savedEditorScroll = localStorage.getItem('chlor-editor-scroll');
@@ -96,7 +153,7 @@ export default function App() {
     if (savedRefScroll !== null) refScrollRef.current = Number(savedRefScroll);
     setTimeout(() => {
       if (textareaRef.current) textareaRef.current.scrollTop = editorScrollRef.current;
-      if (refTextareaRef.current) refTextareaRef.current.scrollTop = refScrollRef.current;
+      if (refPanelRef.current) refPanelRef.current.scrollTop = refScrollRef.current;
     }, 100);
   }, []);
 
@@ -106,6 +163,7 @@ export default function App() {
   const showRefRef = useRef(showReference);
   const splitRef = useRef(splitRatio);
   const apiKeyRef = useRef(geminiApiKey);
+  const hardFontRef = useRef(isHardFontMode);
 
   useEffect(() => {
     textRef.current = text;
@@ -113,7 +171,8 @@ export default function App() {
     showRefRef.current = showReference;
     splitRef.current = splitRatio;
     apiKeyRef.current = geminiApiKey;
-  }, [text, referenceText, showReference, splitRatio, geminiApiKey]);
+    hardFontRef.current = isHardFontMode;
+  }, [text, referenceText, showReference, splitRatio, geminiApiKey, isHardFontMode]);
 
   // Auto-save timer
   useEffect(() => {
@@ -123,6 +182,7 @@ export default function App() {
       localStorage.setItem('chlor-show-ref', showRefRef.current.toString());
       localStorage.setItem('chlor-split', splitRef.current.toString());
       if (apiKeyRef.current) localStorage.setItem('chlor-gemini-key', apiKeyRef.current);
+      localStorage.setItem('chlor-hard-font', hardFontRef.current.toString());
       localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
       localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
     }, 10000);
@@ -133,6 +193,7 @@ export default function App() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging || !containerRef.current) return;
+      e.preventDefault(); // Prevent scroll during drag
       const container = containerRef.current.getBoundingClientRect();
       
       let clientX, clientY;
@@ -213,8 +274,8 @@ export default function App() {
   }, []);
 
   const handleRefScroll = useCallback(() => {
-    if (refTextareaRef.current) {
-      refScrollRef.current = refTextareaRef.current.scrollTop;
+    if (refPanelRef.current) {
+      refScrollRef.current = refPanelRef.current.scrollTop;
     }
   }, []);
 
@@ -268,7 +329,8 @@ export default function App() {
   }, []);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text);
+    const output = isHardFontMode ? convertToHardFont(text) : text;
+    navigator.clipboard.writeText(output);
   };
 
   const handleFullScreen = () => {
@@ -299,6 +361,7 @@ export default function App() {
     localStorage.setItem('chlor-show-ref', showReference.toString());
     localStorage.setItem('chlor-split', splitRatio.toString());
     if (geminiApiKey) localStorage.setItem('chlor-gemini-key', geminiApiKey);
+    localStorage.setItem('chlor-hard-font', isHardFontMode.toString());
     localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
     localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
     setSaveStatus('Saved!');
@@ -342,7 +405,7 @@ export default function App() {
         }
         if (parsed.refScroll !== undefined) {
           refScrollRef.current = parsed.refScroll;
-          setTimeout(() => { if (refTextareaRef.current) refTextareaRef.current.scrollTop = parsed.refScroll; }, 100);
+          setTimeout(() => { if (refPanelRef.current) refPanelRef.current.scrollTop = parsed.refScroll; }, 100);
         }
       } catch (err) {
         console.error("Invalid JSON file");
@@ -359,6 +422,20 @@ export default function App() {
     } catch (err) {
       console.error('Failed to read clipboard contents: ', err);
     }
+  };
+
+  const handlePasteToReference = async () => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      setReferenceText(prev => prev ? prev + '\n' + clipboardText : clipboardText);
+    } catch (err) {
+      console.error('Failed to read clipboard contents: ', err);
+    }
+  };
+
+  const handleClearReference = () => {
+    setReferenceText('');
+    localStorage.setItem('chlor-ref', '');
   };
 
   const onEmojiClick = (emojiObject: any) => {
@@ -383,7 +460,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-full flex flex-col relative overflow-hidden">
+    <div className="h-screen w-full flex flex-col relative overflow-hidden" style={{ height: '100dvh' }}>
       {/* Settings Dropdown Button */}
       <div className="fixed top-4 right-4 z-50" ref={settingsRef}>
         <button
@@ -404,6 +481,13 @@ export default function App() {
             <button onClick={() => setFontSize(f => Math.max(8, f - 2))} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Decrease Font"><Minus size={20} /></button>
             <button onClick={() => { setIsDarkMode(true); setIsAmoled(!isAmoled); }} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="Toggle AMOLED">
               <Moon size={20} fill={isAmoled ? "white" : "none"} />
+            </button>
+            <button 
+              onClick={() => setIsHardFontMode(!isHardFontMode)} 
+              className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" 
+              title="Hard Font Mode"
+            >
+              <Bold size={20} fill={isHardFontMode ? "white" : "none"} />
             </button>
             <button onClick={() => setIsFullSettingsModalOpen(true)} className="p-3 hover:bg-white/20 rounded-lg transition-colors text-white" title="More Settings"><Settings size={20} /></button>
           </div>
@@ -450,6 +534,20 @@ export default function App() {
                   className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10"
                 >
                   {isDarkMode ? <Moon size={18} /> : <Sun size={18} />}
+                </button>
+              </div>
+
+              {/* Hard Font Mode */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium opacity-80">Hard Font Mode</span>
+                  <p className="text-xs opacity-50">Copy converts *bold* ~strike~ to Unicode</p>
+                </div>
+                <button 
+                  onClick={() => setIsHardFontMode(!isHardFontMode)}
+                  className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10"
+                >
+                  <Bold size={18} fill={isHardFontMode ? "currentColor" : "none"} />
                 </button>
               </div>
 
@@ -503,6 +601,17 @@ export default function App() {
                 <p className="text-xs opacity-50 mt-1">For AI text suggestions (gemma-3-27b-it)</p>
               </div>
 
+              {/* Clear Reference */}
+              <div className="pt-2 border-t border-black/10 dark:border-white/10">
+                <button 
+                  onClick={handleClearReference}
+                  className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-red-500/10 text-sm w-full"
+                  style={{ color: referenceText ? `hsl(0, 60%, 60%)` : 'inherit', opacity: referenceText ? 1 : 0.4 }}
+                >
+                  <Trash2 size={16} /> <span>Clear Reference</span>
+                </button>
+              </div>
+
               {/* Actions */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
                 <button 
@@ -535,7 +644,7 @@ export default function App() {
                   onClick={handleCopy}
                   className="flex items-center justify-center space-x-2 p-2 rounded hover:bg-black/5 dark:hover:bg-white/5 text-sm"
                 >
-                  <Copy size={16} /> <span>Copy</span>
+                  <Copy size={16} /> <span>{isHardFontMode ? 'Copy (Hard)' : 'Copy'}</span>
                 </button>
                 <button 
                   onClick={() => fileInputRef.current?.click()}
@@ -556,25 +665,51 @@ export default function App() {
         )}
       </div>
 
+      {/* Hard Font Mode Indicator */}
+      {isHardFontMode && (
+        <div 
+          className="fixed top-4 left-4 z-40 px-3 py-1 rounded-full text-xs font-medium opacity-50 pointer-events-none"
+          style={{ 
+            backgroundColor: `hsla(${hue}, 50%, 50%, 0.15)`,
+            color: `hsl(${hue}, 60%, 60%)`
+          }}
+        >
+          HARD FONT
+        </div>
+      )}
+
       {/* Main Content Area */}
       <main ref={containerRef} className={`flex-1 flex flex-col md:flex-row w-full overflow-hidden relative ${isDragging ? 'select-none' : ''}`}>
         
-        {/* Reference Panel */}
+        {/* Reference Panel — read-only div, no cursor */}
         {showReference && (
           <div 
             className="flex flex-col overflow-hidden"
             style={{ flexBasis: `${splitRatio}%` }}
           >
-            <textarea
-              ref={refTextareaRef}
-              value={referenceText}
-              onChange={(e) => setReferenceText(e.target.value)}
+            <div
+              ref={refPanelRef}
               onScroll={handleRefScroll}
-              placeholder="Paste reference text here..."
-              className="flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
+              className="reference-panel flex-1 w-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 overflow-y-auto"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
-              spellCheck={false}
-            />
+            >
+              {referenceText || (
+                <span style={{ opacity: 0.3 }}>
+                  Reference text appears here. Paste via the button below or load from a JSON import.
+                </span>
+              )}
+              {/* Blank space at the end for extra scroll room */}
+              <div style={{ height: '50vh' }} />
+            </div>
+            {/* Paste-to-reference button at bottom of panel */}
+            <button
+              onClick={handlePasteToReference}
+              className="flex items-center justify-center space-x-2 p-2 opacity-30 hover:opacity-80 transition-opacity text-xs"
+              style={{ color: `hsl(${(hue + 30) % 360}, 55%, 55%)` }}
+              title="Paste clipboard to reference"
+            >
+              <Clipboard size={14} /> <span>Paste to Reference</span>
+            </button>
           </div>
         )}
 
@@ -607,17 +742,19 @@ export default function App() {
 
           {isReaderMode ? (
             <div 
-              className="markdown-body flex-1 w-full p-4 sm:p-8 md:p-12 overflow-y-auto hide-scrollbar !pb-[50vh]"
+              className="markdown-body flex-1 w-full p-4 sm:p-8 md:p-12 overflow-y-auto hide-scrollbar"
               style={{ fontFamily, fontSize: `${fontSize}px` }}
             >
               <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
+              {/* Blank space at end for extra scroll room */}
+              <div style={{ height: '50vh' }} />
             </div>
           ) : (
             <div className="flex-1 relative overflow-hidden">
               {/* Ghost text overlay — renders ALL visible text */}
               <div
                 ref={ghostRef}
-                className="ghost-overlay absolute inset-0 p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto pointer-events-none hide-scrollbar"
+                className="ghost-overlay absolute inset-0 p-4 sm:p-8 md:p-12 overflow-y-auto pointer-events-none hide-scrollbar"
                 style={{ fontFamily, fontSize: `${fontSize}px` }}
                 aria-hidden="true"
               >
@@ -633,6 +770,8 @@ export default function App() {
                 ) : (
                   text || '\u00A0'
                 )}
+                {/* Blank space at end for extra scroll room */}
+                <div style={{ height: '50vh' }} />
               </div>
               {/* Actual textarea — text is transparent, caret visible */}
               <textarea

@@ -25,16 +25,30 @@
   --text-color: hsl(var(--hue), var(--text-saturation), var(--text-lightness));
   --accent-color: hsl(var(--hue), 50%, 50%);
   
+  /* Reference text uses a hue-shifted accent (offset by +30 degrees) */
+  --ref-hue: calc(var(--hue) + 30);
+  --ref-text-color: hsl(var(--ref-hue), 55%, 45%);
+  
   --brightness-filter: brightness(1);
 }
 
 .dark {
   --bg-color: hsl(var(--hue), var(--saturation), var(--bg-darkness));
   --text-color: hsl(var(--hue), var(--text-saturation), var(--text-darkness));
+  --ref-text-color: hsl(var(--ref-hue), 50%, 65%);
 }
 
 .dark.amoled {
   --bg-color: #000000;
+}
+
+/* Prevent all overscroll / pull-to-refresh behavior */
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  height: 100%;
+  height: 100dvh;
+  touch-action: manipulation;
 }
 
 body {
@@ -42,6 +56,12 @@ body {
   color: var(--text-color);
   transition: background-color 0.3s ease, color 0.3s ease;
   filter: var(--brightness-filter);
+}
+
+#root {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* Markdown Styles */
@@ -149,10 +169,10 @@ body {
   margin-bottom: 1em;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — minimal, unobtrusive */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -161,8 +181,8 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--hue), var(--saturation), 50%);
-  border-radius: 4px;
-  opacity: 0.5;
+  border-radius: 3px;
+  opacity: 0.4;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -176,6 +196,22 @@ body {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Reference panel — read-only, no cursor, hue-shifted text */
+.reference-panel {
+  color: var(--ref-text-color);
+  cursor: default;
+  user-select: text;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.6;
+  overscroll-behavior: contain;
+}
+
+.reference-panel::selection {
+  background: hsla(var(--ref-hue), 50%, 50%, 0.25);
 }
 
 /* Ghost text overlay for AI predictions */
@@ -200,4 +236,9 @@ body {
 
 .ghost-editor::selection {
   background: hsla(var(--hue), 50%, 50%, 0.3);
+}
+
+/* All scrollable panels prevent overscroll */
+textarea, .reference-panel, .markdown-body {
+  overscroll-behavior: contain;
 }
