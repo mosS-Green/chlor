@@ -54,7 +54,7 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemma-3-27b-it',
+        model: 'gemma-4-26b-a4b-it',
         contents: [
           {
             role: 'user',

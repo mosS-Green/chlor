@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "expressive": {
+      "source": "bergside/awesome-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/expressive/SKILL.md",
+      "computedHash": "e0543aeb7521663e007f6534d0bb9dedf76a7e996a995d9c7607d35473a0753a"
+    },
+    "typescript-expert": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/typescript-expert/SKILL.md",
+      "computedHash": "b4623290742a2319a2c6aca09c62438a796c399f65aac6facd7273f9b144c8e7"
+    }
+  }
+}
