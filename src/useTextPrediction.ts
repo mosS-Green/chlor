@@ -8,6 +8,8 @@ interface PredictionOptions {
   enabled: boolean;
 }
 
+const TRIGGER_SEQUENCE = ',,,';
+
 interface Suggestion {
   text: string;        // The full suggestion text (never starts with whitespace)
   anchorPos: number;   // Cursor position where suggestion is anchored (advances on space)
@@ -17,10 +19,12 @@ interface Suggestion {
 export function useTextPrediction({ text, cursorPos, apiKey, enabled }: PredictionOptions) {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [triggerDetected, setTriggerDetected] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef(false);
   const prevTextRef = useRef(text);
   const prevCursorRef = useRef(cursorPos);
+  const pendingTriggerRef = useRef(false);
 
   const clearSuggestion = useCallback(() => {
     setSuggestion(null);
@@ -91,16 +95,38 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     }
   }, [apiKey, enabled]);
 
+  // Detect ,,, trigger sequence
   useEffect(() => {
+    if (!enabled || !apiKey) return;
+    
+    // Check if text before cursor ends with ,,,
+    const textBeforeCursor = text.slice(0, cursorPos);
+    if (textBeforeCursor.endsWith(TRIGGER_SEQUENCE)) {
+      // Signal to component: delete the commas, then we'll fetch
+      pendingTriggerRef.current = true;
+      setTriggerDetected(true);
+      clearSuggestion();
+      // Cancel any idle timer
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      return; // Don't run normal logic — component will update text next
+    }
+
+    // If we just cleared the trigger commas, fire the prediction immediately
+    if (pendingTriggerRef.current) {
+      pendingTriggerRef.current = false;
+      setTriggerDetected(false);
+      fetchPrediction(text, cursorPos);
+      return;
+    }
+
+    // Normal suggestion tracking logic
     const prevText = prevTextRef.current;
     const prevCursor = prevCursorRef.current;
     prevTextRef.current = text;
     prevCursorRef.current = cursorPos;
-
-    if (!enabled || !apiKey) {
-      if (suggestion) clearSuggestion();
-      return;
-    }
 
     if (suggestion) {
       const charsAdded = text.length - prevText.length;
@@ -170,5 +196,6 @@ export function useTextPrediction({ text, cursorPos, apiKey, enabled }: Predicti
     acceptSuggestion,
     clearSuggestion,
     hasSuggestion: !!suggestion && visibleSuggestion.length > 0,
+    triggerDetected,
   };
 }

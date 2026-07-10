@@ -291,6 +291,26 @@ export default function App() {
     enabled: !isReaderMode && geminiApiKey.length > 0,
   });
 
+  // Handle ,,, trigger — delete the three commas when detected
+  useEffect(() => {
+    if (prediction.triggerDetected) {
+      // Remove the three commas from text at cursor position
+      const before = text.slice(0, cursorPos - 3);
+      const after = text.slice(cursorPos);
+      const newText = before + after;
+      const newCursor = cursorPos - 3;
+      setText(newText);
+      setCursorPos(newCursor);
+      // Also update the textarea cursor
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = newCursor;
+          textareaRef.current.selectionEnd = newCursor;
+        }
+      }, 0);
+    }
+  }, [prediction.triggerDetected]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Sync ghost overlay scroll with textarea and track scroll position
   const handleEditorScroll = useCallback(() => {
     if (textareaRef.current) {
