@@ -3,7 +3,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { ChevronDown, Settings, Type, Moon, Sun, Copy, Maximize, BookOpen, Edit3, Upload, Clipboard, Smile, PanelLeft, Save, Download, FileJson, Plus, Minus, Eye, EyeOff, Trash2, Bold, Pencil, Check, GripVertical } from 'lucide-react';
-import { useTextPrediction } from './useTextPrediction';
+// import { useTextPrediction } from './useTextPrediction';
 
 const PASTEL_HUES = [
   { name: 'Red', value: 0 },
@@ -105,8 +105,8 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [isFullSettingsModalOpen, setIsFullSettingsModalOpen] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
+  // const [geminiApiKey, setGeminiApiKey] = useState('');
+  // const [showApiKey, setShowApiKey] = useState(false);
   const [cursorPos, setCursorPos] = useState(0);
   const [isHardFontMode, setIsHardFontMode] = useState(false);
   const [keyboardShift, setKeyboardShift] = useState(0);
@@ -142,14 +142,14 @@ export default function App() {
     const savedRef = localStorage.getItem('chlor-ref');
     const savedShowRef = localStorage.getItem('chlor-show-ref');
     const savedSplit = localStorage.getItem('chlor-split');
-    const savedApiKey = localStorage.getItem('chlor-gemini-key');
+    // const savedApiKey = localStorage.getItem('chlor-gemini-key');
     const savedHardFont = localStorage.getItem('chlor-hard-font');
 
     if (savedText !== null) setText(savedText);
     if (savedRef !== null) setReferenceText(savedRef);
     if (savedShowRef !== null) setShowReference(savedShowRef === 'true');
     if (savedSplit !== null) setSplitRatio(Number(savedSplit));
-    if (savedApiKey !== null) setGeminiApiKey(savedApiKey);
+    // if (savedApiKey !== null) setGeminiApiKey(savedApiKey);
     if (savedHardFont !== null) setIsHardFontMode(savedHardFont === 'true');
 
     // Restore scroll positions after a tick
@@ -168,7 +168,7 @@ export default function App() {
   const refTextRef = useRef(referenceText);
   const showRefRef = useRef(showReference);
   const splitRef = useRef(splitRatio);
-  const apiKeyRef = useRef(geminiApiKey);
+  const apiKeyRef = useRef('');
   const hardFontRef = useRef(isHardFontMode);
 
   useEffect(() => {
@@ -176,9 +176,9 @@ export default function App() {
     refTextRef.current = referenceText;
     showRefRef.current = showReference;
     splitRef.current = splitRatio;
-    apiKeyRef.current = geminiApiKey;
+    // apiKeyRef.current = geminiApiKey;
     hardFontRef.current = isHardFontMode;
-  }, [text, referenceText, showReference, splitRatio, geminiApiKey, isHardFontMode]);
+  }, [text, referenceText, showReference, splitRatio, isHardFontMode]);
 
   // Auto-save timer
   useEffect(() => {
@@ -187,7 +187,7 @@ export default function App() {
       localStorage.setItem('chlor-ref', refTextRef.current);
       localStorage.setItem('chlor-show-ref', showRefRef.current.toString());
       localStorage.setItem('chlor-split', splitRef.current.toString());
-      if (apiKeyRef.current) localStorage.setItem('chlor-gemini-key', apiKeyRef.current);
+      // if (apiKeyRef.current) localStorage.setItem('chlor-gemini-key', apiKeyRef.current);
       localStorage.setItem('chlor-hard-font', hardFontRef.current.toString());
       localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
       localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
@@ -283,33 +283,31 @@ export default function App() {
     return () => vv.removeEventListener('resize', handleResize);
   }, [showReference]);
 
-  // AI Text Prediction
-  const prediction = useTextPrediction({
-    text,
-    cursorPos,
-    apiKey: geminiApiKey,
-    enabled: !isReaderMode && geminiApiKey.length > 0,
-  });
+  // // AI Text Prediction (commented out)
+  // const prediction = useTextPrediction({
+  //   text,
+  //   cursorPos,
+  //   apiKey: geminiApiKey,
+  //   enabled: !isReaderMode && geminiApiKey.length > 0,
+  // });
 
-  // Handle ,,, trigger — delete the three commas when detected
-  useEffect(() => {
-    if (prediction.triggerDetected) {
-      // Remove the three commas from text at cursor position
-      const before = text.slice(0, cursorPos - 3);
-      const after = text.slice(cursorPos);
-      const newText = before + after;
-      const newCursor = cursorPos - 3;
-      setText(newText);
-      setCursorPos(newCursor);
-      // Also update the textarea cursor
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.selectionStart = newCursor;
-          textareaRef.current.selectionEnd = newCursor;
-        }
-      }, 0);
-    }
-  }, [prediction.triggerDetected]); // eslint-disable-line react-hooks/exhaustive-deps
+  // // Handle ,,, trigger — delete the three commas when detected
+  // useEffect(() => {
+  //   if (prediction.triggerDetected) {
+  //     const before = text.slice(0, cursorPos - 3);
+  //     const after = text.slice(cursorPos);
+  //     const newText = before + after;
+  //     const newCursor = cursorPos - 3;
+  //     setText(newText);
+  //     setCursorPos(newCursor);
+  //     setTimeout(() => {
+  //       if (textareaRef.current) {
+  //         textareaRef.current.selectionStart = newCursor;
+  //         textareaRef.current.selectionEnd = newCursor;
+  //       }
+  //     }, 0);
+  //   }
+  // }, [prediction.triggerDetected]);
 
   // Sync ghost overlay scroll with textarea and track scroll position
   const handleEditorScroll = useCallback(() => {
@@ -328,47 +326,47 @@ export default function App() {
     }
   }, []);
 
-  // Handle Tab key to accept suggestion
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab' && prediction.hasSuggestion) {
-      e.preventDefault();
-      const result = prediction.acceptSuggestion();
-      if (result) {
-        setText(result.newText);
-        setCursorPos(result.newCursorPos);
-        setTimeout(() => {
-          if (textareaRef.current) {
-            textareaRef.current.selectionStart = result.newCursorPos;
-            textareaRef.current.selectionEnd = result.newCursorPos;
-          }
-        }, 0);
-      }
-    }
-  }, [prediction]);
+  // // Handle Tab key to accept suggestion (commented out)
+  // const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  //   if (e.key === 'Tab' && prediction.hasSuggestion) {
+  //     e.preventDefault();
+  //     const result = prediction.acceptSuggestion();
+  //     if (result) {
+  //       setText(result.newText);
+  //       setCursorPos(result.newCursorPos);
+  //       setTimeout(() => {
+  //         if (textareaRef.current) {
+  //           textareaRef.current.selectionStart = result.newCursorPos;
+  //           textareaRef.current.selectionEnd = result.newCursorPos;
+  //         }
+  //       }, 0);
+  //     }
+  //   }
+  // }, [prediction]);
 
-  // Triple-tap handler for mobile
-  const handleTouchEnd = useCallback(() => {
-    if (!prediction.hasSuggestion) return;
-    const ref = tripleTapRef.current;
-    ref.count++;
-    if (ref.timer) clearTimeout(ref.timer);
-    if (ref.count >= 3) {
-      ref.count = 0;
-      const result = prediction.acceptSuggestion();
-      if (result) {
-        setText(result.newText);
-        setCursorPos(result.newCursorPos);
-        setTimeout(() => {
-          if (textareaRef.current) {
-            textareaRef.current.selectionStart = result.newCursorPos;
-            textareaRef.current.selectionEnd = result.newCursorPos;
-          }
-        }, 0);
-      }
-    } else {
-      ref.timer = setTimeout(() => { ref.count = 0; }, 500);
-    }
-  }, [prediction]);
+  // // Triple-tap handler for mobile (commented out)
+  // const handleTouchEnd = useCallback(() => {
+  //   if (!prediction.hasSuggestion) return;
+  //   const ref = tripleTapRef.current;
+  //   ref.count++;
+  //   if (ref.timer) clearTimeout(ref.timer);
+  //   if (ref.count >= 3) {
+  //     ref.count = 0;
+  //     const result = prediction.acceptSuggestion();
+  //     if (result) {
+  //       setText(result.newText);
+  //       setCursorPos(result.newCursorPos);
+  //       setTimeout(() => {
+  //         if (textareaRef.current) {
+  //           textareaRef.current.selectionStart = result.newCursorPos;
+  //           textareaRef.current.selectionEnd = result.newCursorPos;
+  //         }
+  //       }, 0);
+  //     }
+  //   } else {
+  //     ref.timer = setTimeout(() => { ref.count = 0; }, 500);
+  //   }
+  // }, [prediction]);
 
   // Track cursor position
   const updateCursorPos = useCallback(() => {
@@ -409,7 +407,7 @@ export default function App() {
     localStorage.setItem('chlor-ref', referenceText);
     localStorage.setItem('chlor-show-ref', showReference.toString());
     localStorage.setItem('chlor-split', splitRatio.toString());
-    if (geminiApiKey) localStorage.setItem('chlor-gemini-key', geminiApiKey);
+    // if (geminiApiKey) localStorage.setItem('chlor-gemini-key', geminiApiKey);
     localStorage.setItem('chlor-hard-font', isHardFontMode.toString());
     localStorage.setItem('chlor-editor-scroll', editorScrollRef.current.toString());
     localStorage.setItem('chlor-ref-scroll', refScrollRef.current.toString());
@@ -659,7 +657,7 @@ export default function App() {
                 />
               </div>
 
-              {/* Gemini API Key */}
+              {/* Gemini API Key (commented out)
               <div>
                 <label className="text-sm font-medium mb-2 block opacity-80">Gemini API Key</label>
                 <div className="relative">
@@ -679,6 +677,7 @@ export default function App() {
                 </div>
                 <p className="text-xs opacity-50 mt-1">For AI text suggestions (gemma-4-26b-a4b-it)</p>
               </div>
+              */}
 
               {/* Clear Reference */}
               <div className="pt-2 border-t border-black/10 dark:border-white/10">
@@ -865,7 +864,8 @@ export default function App() {
             </div>
           ) : (
             <div className="flex-1 relative overflow-hidden">
-              {/* Ghost text overlay — renders ALL visible text */}
+              {/* Ghost text overlay — only renders when there's a prediction suggestion */}
+              {/* (prediction disabled — ghost overlay not needed)
               <div
                 ref={ghostRef}
                 className="ghost-overlay absolute inset-0 p-4 sm:p-8 md:p-12 overflow-y-auto pointer-events-none hide-scrollbar"
@@ -884,10 +884,10 @@ export default function App() {
                 ) : (
                   text || '\u00A0'
                 )}
-                {/* Blank space at end for extra scroll room */}
                 <div style={{ height: '50vh' }} />
               </div>
-              {/* Actual textarea — text is transparent, caret visible */}
+              */}
+              {/* Actual textarea */}
               <textarea
                 ref={textareaRef}
                 value={text}
@@ -895,14 +895,12 @@ export default function App() {
                   setText(e.target.value);
                   setTimeout(updateCursorPos, 0);
                 }}
-                onKeyDown={handleKeyDown}
                 onSelect={updateCursorPos}
                 onClick={updateCursorPos}
-                onTouchEnd={handleTouchEnd}
                 onScroll={handleEditorScroll}
                 placeholder="Start typing or paste your content..."
-                className="ghost-editor absolute inset-0 w-full h-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
-                style={{ fontFamily, fontSize: `${fontSize}px`, color: 'transparent', caretColor: `hsl(${hue}, 60%, 60%)` }}
+                className="absolute inset-0 w-full h-full bg-transparent resize-none outline-none hide-scrollbar p-4 sm:p-8 md:p-12 !pb-[50vh] overflow-y-auto"
+                style={{ fontFamily, fontSize: `${fontSize}px`, caretColor: `hsl(${hue}, 60%, 60%)` }}
                 spellCheck={false}
               />
             </div>
